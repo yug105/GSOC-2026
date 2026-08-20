@@ -132,10 +132,6 @@ Live lists: [metacall/core](https://github.com/metacall/core/pulls?q=is%3Apr+aut
 
 **Never disable something to get CI green.** The quickest way to a green MinGW build is to switch off whatever does not compile. Skipping the backtrace plugin under MinGW because it genuinely cannot build there is a documented limitation. Skipping a test because it fails is hiding a bug and handing it to whoever hits it next. The two look identical in a diff and the difference matters, and it is the maintainer's call rather than mine. Where I could not find the real fix, the right move was to report the error and ask.
 
-### What's left
-
-MinGW/MSYS2 ([#846](https://github.com/metacall/core/pull/846)) and Android dynlink ([#620](https://github.com/metacall/core/pull/620)) are implemented and waiting on review. Android CI for core, running the suite on a device through `CMAKE_CROSSCOMPILING_EMULATOR` and `adb`, is in progress. Cygwin is not started, and NetBSD support exists in `plthook-poc` but has not been carried into core. The FreeBSD Python teardown segfault and the Haiku destructor crash are both understood and have reproducers, but the fix changes loader shutdown ordering, which is a maintainer decision rather than mine.
-
 ---
 
 Thanks to [@viferga](https://github.com/viferga), [@pkspyder](https://github.com/pkspyder) and [@Ashpect](https://github.com/Ashpect) for the mentorship.
