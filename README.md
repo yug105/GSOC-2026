@@ -48,9 +48,9 @@ Then move to the next platform. Doing them one at a time kept the PRs small enou
 
 ### HP-UX
 
-**[core #617](https://github.com/metacall/core/pull/617), merged.** HP-UX does not have `dlopen`. It uses `shl_load`, `shl_findsym` and `shl_unload`, which is a different API entirely. I wrote `dynlink_impl_hpux.c` and its header, wired it through `dynlink_interface.h`, and added `PROJECT_OS_HPUX` with its own `hpux` OS family in `cmake/Portability.cmake` so the dynlink CMakeLists picks the right backend.
+**[core #617](https://github.com/metacall/core/pull/617), merged.** HP-UX has no `dlopen`, it uses `shl_load`, `shl_findsym` and `shl_unload`. I added `dynlink_impl_hpux.c` and its header, wired through `dynlink_interface.h`, plus `PROJECT_OS_HPUX` and its own `hpux` OS family in `cmake/Portability.cmake`.
 
-This set the pattern for everything after. Dynlink is an interface with one implementation per OS family, so adding a platform means adding an implementation, not adding `#ifdef`s to an existing one.
+This set the pattern for the rest. Dynlink is an interface with one implementation per OS family, so adding a platform means adding an implementation, not `#ifdef`s.
 
 ### Android
 
