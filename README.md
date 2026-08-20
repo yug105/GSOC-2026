@@ -48,13 +48,13 @@ Then move to the next platform. Doing them one at a time kept the PRs small enou
 
 ### HP-UX (January)
 
-**[core #617](https://github.com/metacall/core/pull/617), merged.** HP-UX does not have `dlopen`. It uses `shl_load`, `shl_findsym` and `shl_unload`, which is a different API entirely. I wrote `dynlink_impl_hpux.c` (158 lines) and its header, wired it through `dynlink_interface.h`, and added `PROJECT_OS_HPUX` with its own `hpux` OS family in `cmake/Portability.cmake` so the dynlink CMakeLists picks the right backend.
+**[core #617](https://github.com/metacall/core/pull/617), merged.** HP-UX does not have `dlopen`. It uses `shl_load`, `shl_findsym` and `shl_unload`, which is a different API entirely. I wrote `dynlink_impl_hpux.c` and its header, wired it through `dynlink_interface.h`, and added `PROJECT_OS_HPUX` with its own `hpux` OS family in `cmake/Portability.cmake` so the dynlink CMakeLists picks the right backend.
 
 This set the pattern for everything after. Dynlink is an interface with one implementation per OS family, so adding a platform means adding an implementation, not adding `#ifdef`s to an existing one.
 
 ### Android (January to February)
 
-**[core #620](https://github.com/metacall/core/pull/620), open.** Bionic's linker differs enough from glibc that the Unix dynlink path needs its own handling. +1101 lines across 10 files. Still open.
+**[core #620](https://github.com/metacall/core/pull/620), open.** Bionic's linker differs enough from glibc that the Unix dynlink path needs its own handling. This PR adds that handling. Still open.
 
 **[plthook #17](https://github.com/metacall/plthook/pull/17), merged.** plthook's Android CI was broken before I could test the core side, so I fixed that first. Rewrote the test runner as `test/android/run_tests.sh`, fixed `Android.mk` and `Application.mk`, repaired the workflow.
 
@@ -62,31 +62,31 @@ This set the pattern for everything after. Dynlink is an interface with one impl
 
 The biggest part of the project.
 
-**[plthook #19](https://github.com/metacall/plthook/pull/19), merged.** FreeBSD support in plthook, +277 lines in `plthook_elf.c`. FreeBSD's linker exposes its link map differently from glibc, so the ELF walking needed its own path. Added CI alongside it.
+**[plthook #19](https://github.com/metacall/plthook/pull/19), merged.** FreeBSD support in plthook, in `plthook_elf.c`. FreeBSD's linker exposes its link map differently from glibc, so the ELF walking needed its own path. Added CI alongside it.
 
 **[plthook-poc #1](https://github.com/metacall/plthook-poc/pull/1), merged.** FreeBSD and NetBSD in the proof-of-concept harness.
 
-**[core #762](https://github.com/metacall/core/pull/762), merged.** The FreeBSD CI pipeline. A 46-line `freebsd-test.yml` running a real FreeBSD VM through `cross-platform-actions`, with 29 lines of setup added to `metacall-environment.sh` and nothing platform-specific in the YAML. Getting it to build also needed fixes in `cmake/FindNodeJS.cmake` and `portability_executable_path.c`, since FreeBSD gets the running executable's path from a `sysctl` rather than `/proc/self/exe`.
+**[core #762](https://github.com/metacall/core/pull/762), merged.** The FreeBSD CI pipeline. A `freebsd-test.yml` running a real FreeBSD VM through `cross-platform-actions`, with the FreeBSD setup added to `metacall-environment.sh` and nothing platform-specific in the YAML. Getting it to build also needed fixes in `cmake/FindNodeJS.cmake` and `portability_executable_path.c`, since FreeBSD gets the running executable's path from a `sysctl` rather than `/proc/self/exe`.
 
-**[core #772](https://github.com/metacall/core/pull/772), merged.** Another 27 lines of FreeBSD setup, plus fixes to `FindWasmtime.cmake` and `RustProject.cmake` so more loaders build.
+**[core #772](https://github.com/metacall/core/pull/772), merged.** More FreeBSD setup, plus fixes to `FindWasmtime.cmake` and `RustProject.cmake` so more loaders build.
 
-**[plthook #23](https://github.com/metacall/plthook/pull/23), merged.** Tests passed on FreeBSD at `-O0` and `-O1` and failed at `-O2` and `-O3`. It was not a FreeBSD bug and not a compiler bug. It was undefined pointer arithmetic in plthook's own code. 13 lines in `plthook_elf.c` made it well-defined and it passed at every level.
+**[plthook #23](https://github.com/metacall/plthook/pull/23), merged.** Tests passed on FreeBSD at `-O0` and `-O1` and failed at `-O2` and `-O3`. It was not a FreeBSD bug and not a compiler bug. It was undefined pointer arithmetic in plthook's own code. Making that arithmetic well-defined in `plthook_elf.c` fixed it at every level.
 
 **[core #805](https://github.com/metacall/core/pull/805), merged.** FreeBSD CI with sanitizers turned on, which is where the harder failures show up. Included fixes in `plthook_detour_impl.c` and the WASM test.
 
 ### Haiku (June to July)
 
-**[plthook #24](https://github.com/metacall/plthook/pull/24), merged.** Haiku support in plthook, +189 lines in `plthook_elf.c` plus a Haiku workflow. Haiku is BeOS-derived rather than Unix-derived, so there is no `/proc`, no `getconf`, and the loader has its own API.
+**[plthook #24](https://github.com/metacall/plthook/pull/24), merged.** Haiku support in plthook, in `plthook_elf.c`, plus a Haiku workflow. Haiku is BeOS-derived rather than Unix-derived, so there is no `/proc`, no `getconf`, and the loader has its own API.
 
 **[core #833](https://github.com/metacall/core/pull/833), merged.** Haiku CI for core plus the fixes needed to get it building. Three parts:
 
-- A 47-line `haiku-test.yml` running Haiku r1beta5 across debug, relwithdebinfo and release.
-- Three lines in `source/dynlink/CMakeLists.txt` selecting the `unix` dynlink implementation for Haiku. Haiku's OS family is `beos`, which would otherwise pick the old `load_add_on` backend, but Haiku does provide a working `dlopen`. Special-casing the selection was the right fix, the same way macOS is handled a few lines above.
+- A `haiku-test.yml` running Haiku r1beta5 across debug, relwithdebinfo and release.
+- A change in `source/dynlink/CMakeLists.txt` selecting the `unix` dynlink implementation for Haiku. Haiku's OS family is `beos`, which would otherwise pick the old `load_add_on` backend, but Haiku does provide a working `dlopen`. Special-casing the selection was the right fix, the same way macOS is handled a few lines above.
 - A fix in `rapid_json_serial_impl.cpp` moving the RapidJSON allocator into the document struct, so it dies with the document instead of outliving the plugin that owns it.
 
 ### MinGW / MSYS2 (July)
 
-**[core #846](https://github.com/metacall/core/pull/846), open.** MinGW is Windows with a GCC toolchain and a POSIX-ish shell instead of MSVC. Adds a 58-line `windows-mingw-test.yml` and works through what breaks: flags in `CompileOptions.cmake` and `InstallGTest.cmake`, `log_policy_stream_syslog.c` (no syslog under MinGW), `metacall_link.c`, a guard so the backtrace plugin is skipped where it cannot build, and fixes in the fork and serial tests.
+**[core #846](https://github.com/metacall/core/pull/846), open.** MinGW is Windows with a GCC toolchain and a POSIX-ish shell instead of MSVC. Adds a `windows-mingw-test.yml` and works through what breaks: flags in `CompileOptions.cmake` and `InstallGTest.cmake`, `log_policy_stream_syslog.c` (no syslog under MinGW), `metacall_link.c`, a guard so the backtrace plugin is skipped where it cannot build, and fixes in the fork and serial tests.
 
 ### Teardown reproducer (July)
 
@@ -109,25 +109,25 @@ Open and awaiting review: MinGW/MSYS2 ([#846](https://github.com/metacall/core/p
 
 ### GSoC coding period
 
-| # | Repo | Title | State | Date | Diff |
-|---|---|---|---|---|---|
-| [#846](https://github.com/metacall/core/pull/846) | core | MinGW / MSYS2 support | Open | Jul 16, 2026 | +99 / -11 |
-| [#833](https://github.com/metacall/core/pull/833) | core | Haiku CI, dynlink selection and RapidJSON allocator fix | Merged | Jul 8, 2026 | +59 / -13 |
-| [#24](https://github.com/metacall/plthook/pull/24) | plthook | Add Haiku OS support | Merged | Jun 14, 2026 | +240 / -8 |
-| [#805](https://github.com/metacall/core/pull/805) | core | FreeBSD CI with sanitizers | Merged | Jun 10, 2026 | +18 / -6 |
+| # | Repo | Title | State | Date |
+|---|---|---|---|---|
+| [#846](https://github.com/metacall/core/pull/846) | core | MinGW / MSYS2 support | Open | Jul 16, 2026 |
+| [#833](https://github.com/metacall/core/pull/833) | core | Haiku CI, dynlink selection and RapidJSON allocator fix | Merged | Jul 8, 2026 |
+| [#24](https://github.com/metacall/plthook/pull/24) | plthook | Add Haiku OS support | Merged | Jun 14, 2026 |
+| [#805](https://github.com/metacall/core/pull/805) | core | FreeBSD CI with sanitizers | Merged | Jun 10, 2026 |
 
 ### Contributor period (before the coding period)
 
-| # | Repo | Title | State | Date | Diff |
-|---|---|---|---|---|---|
-| [#23](https://github.com/metacall/plthook/pull/23) | plthook | Fix undefined behaviour in address arithmetic causing -O2/-O3 failures on FreeBSD | Merged | May 19, 2026 | +15 / -13 |
-| [#772](https://github.com/metacall/core/pull/772) | core | FreeBSD build support, additional loaders | Merged | Apr 18, 2026 | +41 / -4 |
-| [#762](https://github.com/metacall/core/pull/762) | core | Add FreeBSD CI | Merged | Apr 14, 2026 | +100 / -22 |
-| [#1](https://github.com/metacall/plthook-poc/pull/1) | plthook-poc | FreeBSD and NetBSD support | Merged | Apr 7, 2026 | +48 / -1 |
-| [#19](https://github.com/metacall/plthook/pull/19) | plthook | FreeBSD support | Merged | Apr 4, 2026 | +343 / -24 |
-| [#17](https://github.com/metacall/plthook/pull/17) | plthook | Android CI fix | Merged | Mar 2, 2026 | +94 / -78 |
-| [#620](https://github.com/metacall/core/pull/620) | core | Add Android platform support for dynlink module | Open | Jan 22, 2026 | +1101 / -1 |
-| [#617](https://github.com/metacall/core/pull/617) | core | Add HP-UX platform support for dynlink module | Merged | Jan 19, 2026 | +229 / -0 |
+| # | Repo | Title | State | Date |
+|---|---|---|---|---|
+| [#23](https://github.com/metacall/plthook/pull/23) | plthook | Fix undefined behaviour in address arithmetic causing -O2/-O3 failures on FreeBSD | Merged | May 19, 2026 |
+| [#772](https://github.com/metacall/core/pull/772) | core | FreeBSD build support, additional loaders | Merged | Apr 18, 2026 |
+| [#762](https://github.com/metacall/core/pull/762) | core | Add FreeBSD CI | Merged | Apr 14, 2026 |
+| [#1](https://github.com/metacall/plthook-poc/pull/1) | plthook-poc | FreeBSD and NetBSD support | Merged | Apr 7, 2026 |
+| [#19](https://github.com/metacall/plthook/pull/19) | plthook | FreeBSD support | Merged | Apr 4, 2026 |
+| [#17](https://github.com/metacall/plthook/pull/17) | plthook | Android CI fix | Merged | Mar 2, 2026 |
+| [#620](https://github.com/metacall/core/pull/620) | core | Add Android platform support for dynlink module | Open | Jan 22, 2026 |
+| [#617](https://github.com/metacall/core/pull/617) | core | Add HP-UX platform support for dynlink module | Merged | Jan 19, 2026 |
 
 Live lists: [metacall/core](https://github.com/metacall/core/pulls?q=is%3Apr+author%3Ayug105) and [metacall/plthook](https://github.com/metacall/plthook/pulls?q=is%3Apr+author%3Ayug105).
 
@@ -137,9 +137,9 @@ Live lists: [metacall/core](https://github.com/metacall/core/pulls?q=is%3Apr+aut
 
 **Two crashes on two operating systems can be the same bug.** The FreeBSD Python segfault and the Haiku crash looked unrelated. Different OS, different runtime, different stack trace. They are the same failure: something with a destructor, either a `thread_local` object or a runtime's own thread state, gets destroyed after the shared object holding its code has already been unloaded, so the call lands in memory that is no longer mapped. FreeBSD and Haiku both show it because their linkers unmap sooner than glibc does. Treating them as one bug instead of two turned a pair of unrelated CI failures into a single question about shutdown ordering. The RapidJSON fix in [#833](https://github.com/metacall/core/pull/833) is one case of it fixed properly.
 
-**Platform logic belongs in the environment script, not in CI.** This was a constraint from the project description and it turned out to be the most useful rule in the project. Putting `pkg install` lines straight into `freebsd-test.yml` is faster and it works. But then the only way to build on FreeBSD is to push a commit and wait for a VM, and the only person who can debug a FreeBSD failure is someone willing to read the workflow file. Keeping it in `tools/metacall-environment.sh` means the CI job is three lines anyone can run locally.
+**Platform logic belongs in the environment script, not in CI.** This was a constraint from the project description and it turned out to be the most useful rule in the project. Putting `pkg install` lines straight into `freebsd-test.yml` is faster and it works. But then the only way to build on FreeBSD is to push a commit and wait for a VM, and the only person who can debug a FreeBSD failure is someone willing to read the workflow file. Keeping it in `tools/metacall-environment.sh` means the CI job is a couple of commands anyone can run locally.
 
-**Not every platform is Unix.** Haiku is BeOS-derived, so no `/proc`, no `getconf`, and its own loader API. Plenty of code that is portable across Linux, macOS and the BSDs does not apply. But it is not different in every way either. It does have a working `dlopen`, which is why the fix in [#833](https://github.com/metacall/core/pull/833) was three lines picking the `unix` implementation rather than a whole new Haiku backend. Working out which differences are real and which are assumed is most of the work in a port.
+**Not every platform is Unix.** Haiku is BeOS-derived, so no `/proc`, no `getconf`, and its own loader API. Plenty of code that is portable across Linux, macOS and the BSDs does not apply. But it is not different in every way either. It does have a working `dlopen`, which is why the fix in [#833](https://github.com/metacall/core/pull/833) was to pick the `unix` implementation rather than write a whole new Haiku backend. Working out which differences are real and which are assumed is most of the work in a port.
 
 **Break the CI first.** Adding a workflow that you know will fail feels backwards, but it was the right order every time. A failure log from a real FreeBSD 14.2 VM tells you which header is missing and which CMake check failed. Reading the source and writing a fix from a guess produces changes that look reasonable and break something else.
 
