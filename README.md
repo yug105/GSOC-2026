@@ -16,117 +16,96 @@
 
 **Synopsis:** [metacall/gsoc-2026 - Extended Platform and Architecture Support for MetaCall](https://github.com/metacall/gsoc-2026#9-extended-platform-and-architecture-support-for-metacall)
 
-**Contact:** 2023uee1378@mnit.ac.in
+**Contact:** yugagarwal105@gmail.com
 
 ---
 
 ## 1. Project Goals
 
-MetaCall is a polyglot runtime that loads language runtimes as shared-library plugins and marshals calls between them. Because it does that with `dlopen`, PLT/GOT hooking and per-platform dynamic linker behaviour, it is unusually sensitive to the operating system it runs on. At the start of this project MetaCall built and tested on Linux (GCC), Windows (MSVC) and macOS. That leaves out most of the platforms where a polyglot runtime is actually interesting: BSD servers, embedded and mobile targets, and the whole MinGW/MSYS2 toolchain on Windows.
+MetaCall is a polyglot runtime. It loads language runtimes as shared libraries and calls between them, which means it leans on `dlopen`, PLT/GOT hooking, and whatever the platform's dynamic linker happens to do. That makes it more sensitive to the operating system than most projects.
 
-Some of these platforms had partial support already sitting in the core layers, but partial support that nobody tests is indistinguishable from no support. There was no CI, no section in the environment script, and no way to know whether a given platform still built.
+When I started, MetaCall built and tested on Linux (GCC), Windows (MSVC) and macOS. A few other platforms had bits of support sitting in the core layers, but none of it was tested. No CI, no section in the environment script, no way to know whether it still worked.
 
-The project set out to:
+Goals:
 
-- Add first-class support for new platform targets, driven by CI rather than by claims in a README.
-- Keep every piece of platform logic inside `tools/metacall-environment.sh`, with no hardcoded setup in the CI YAML, so that a developer can reproduce a FreeBSD or Haiku build locally with the same commands CI runs.
-- Verify CMake platform detection and the build actually work on each target, not just that they configure.
-- Get the test suite running on each new platform and fix what it uncovers.
-- Fix `metacall/plthook`, the PLT/GOT hooking library MetaCall's detour layer depends on, for the platforms that need it.
+- Add support for new platforms, with CI to prove it works.
+- Keep all platform logic in `tools/metacall-environment.sh` and none in the CI YAML, so anyone can reproduce a build locally.
+- Make sure CMake detection and the build actually work on each target.
+- Get the test suite running on each platform and fix what it finds.
+- Fix `metacall/plthook`, which MetaCall's detour layer depends on, for the platforms that need it.
 
-### Method
+### How I worked
 
-I followed a TDD approach at the level of platforms rather than functions, in three passes per target:
+Three passes per platform:
 
-1. **CI first.** Add the workflow and let it fail. This produces a real, reproducible failure log instead of a guess about what the platform needs.
-2. **Environment script and build system.** Add the platform's section to `metacall-environment.sh` and fix CMake detection until the build completes.
-3. **Fix the test failures.** Work through what the suite reports, which is where the genuinely interesting bugs were.
+1. Add the CI workflow and let it fail. A real failure log beats guessing from the source.
+2. Add the platform's section to `metacall-environment.sh` and fix CMake until it builds.
+3. Fix whatever the tests report.
 
-Then move to the next platform. Going platform by platform rather than in parallel kept each PR small enough to be reviewed properly.
+Then move to the next platform. Doing them one at a time kept the PRs small enough to review.
 
 ## 2. What I Did
 
-### HP-UX dynamic linking (January)
+### HP-UX (January)
 
-**[core #617](https://github.com/metacall/core/pull/617), merged.** HP-UX does not use `dlopen`. It uses the `shl_load` family (`shl_load`, `shl_findsym`, `shl_unload`), a completely separate API from POSIX `dlfcn`. I added a new dynlink backend for it: `dynlink_impl_hpux.c` (158 lines) plus its header, wired through `dynlink_interface.h`, and added `PROJECT_OS_HPUX` detection with a distinct `hpux` OS family in `cmake/Portability.cmake` so `source/dynlink/CMakeLists.txt` selects the right implementation.
+**[core #617](https://github.com/metacall/core/pull/617), merged.** HP-UX does not have `dlopen`. It uses `shl_load`, `shl_findsym` and `shl_unload`, which is a different API entirely. I wrote `dynlink_impl_hpux.c` (158 lines) and its header, wired it through `dynlink_interface.h`, and added `PROJECT_OS_HPUX` with its own `hpux` OS family in `cmake/Portability.cmake` so the dynlink CMakeLists picks the right backend.
 
-This was the first piece of the project and it set the pattern for everything after: MetaCall's dynlink layer is an interface with one implementation per OS family, and adding a platform means adding an implementation, not adding `#ifdef`s to an existing one.
+This set the pattern for everything after. Dynlink is an interface with one implementation per OS family, so adding a platform means adding an implementation, not adding `#ifdef`s to an existing one.
 
-### Android dynlink (January to February)
+### Android (January to February)
 
-**[core #620](https://github.com/metacall/core/pull/620), open.** Android's Bionic linker behaves differently enough from glibc that the Unix dynlink path needs its own handling. This PR adds that support (+1101 lines across 10 files). It is still open pending review.
+**[core #620](https://github.com/metacall/core/pull/620), open.** Bionic's linker differs enough from glibc that the Unix dynlink path needs its own handling. +1101 lines across 10 files. Still open.
 
-**[plthook #17](https://github.com/metacall/plthook/pull/17), merged.** Before the core side could be tested, plthook's own Android CI was broken. I rewrote the Android test runner as a proper shell script (`test/android/run_tests.sh`, replacing the extensionless `run_tests`), fixed `Android.mk` and `Application.mk`, and repaired the CI workflow.
+**[plthook #17](https://github.com/metacall/plthook/pull/17), merged.** plthook's Android CI was broken before I could test the core side, so I fixed that first. Rewrote the test runner as `test/android/run_tests.sh`, fixed `Android.mk` and `Application.mk`, repaired the workflow.
 
 ### FreeBSD (March to June)
 
-This was the largest single thread of the project and it went through the full three-pass cycle.
+The biggest part of the project.
 
-**[plthook #19](https://github.com/metacall/plthook/pull/19), merged.** FreeBSD support in plthook itself, +277 lines in `plthook_elf.c`. The FreeBSD dynamic linker exposes its link map differently from glibc, so the ELF walking code needed a separate path, plus a CI workflow to prove it works.
+**[plthook #19](https://github.com/metacall/plthook/pull/19), merged.** FreeBSD support in plthook, +277 lines in `plthook_elf.c`. FreeBSD's linker exposes its link map differently from glibc, so the ELF walking needed its own path. Added CI alongside it.
 
-**[plthook-poc #1](https://github.com/metacall/plthook-poc/pull/1), merged.** FreeBSD and NetBSD support in the proof-of-concept harness.
+**[plthook-poc #1](https://github.com/metacall/plthook-poc/pull/1), merged.** FreeBSD and NetBSD in the proof-of-concept harness.
 
-**[core #762](https://github.com/metacall/core/pull/762), merged.** The FreeBSD CI pipeline: a 46-line `freebsd-test.yml` running a real FreeBSD VM through `cross-platform-actions`, with 29 lines of FreeBSD setup added to `metacall-environment.sh` and nothing platform-specific left in the YAML. Getting the build green also required fixing `cmake/FindNodeJS.cmake` and `source/portability/portability_executable_path.c`, since FreeBSD retrieves the running executable's path through a `sysctl` rather than `/proc/self/exe`.
+**[core #762](https://github.com/metacall/core/pull/762), merged.** The FreeBSD CI pipeline. A 46-line `freebsd-test.yml` running a real FreeBSD VM through `cross-platform-actions`, with 29 lines of setup added to `metacall-environment.sh` and nothing platform-specific in the YAML. Getting it to build also needed fixes in `cmake/FindNodeJS.cmake` and `portability_executable_path.c`, since FreeBSD gets the running executable's path from a `sysctl` rather than `/proc/self/exe`.
 
-**[core #772](https://github.com/metacall/core/pull/772), merged.** Extended the FreeBSD environment section by another 27 lines and fixed `FindWasmtime.cmake` and the Rust `RustProject.cmake` so more loaders build on FreeBSD.
+**[core #772](https://github.com/metacall/core/pull/772), merged.** Another 27 lines of FreeBSD setup, plus fixes to `FindWasmtime.cmake` and `RustProject.cmake` so more loaders build.
 
-**[plthook #23](https://github.com/metacall/plthook/pull/23), merged.** The most instructive bug of the project. plthook's tests passed on FreeBSD at `-O0` and `-O1` but failed at `-O2` and `-O3`. The cause was not a FreeBSD bug and not a compiler bug: it was undefined behaviour in plthook's own pointer arithmetic, which the optimiser was entitled to assume could not happen. A 13-line change in `plthook_elf.c` made the arithmetic well-defined and the failures disappeared at every optimisation level.
+**[plthook #23](https://github.com/metacall/plthook/pull/23), merged.** Tests passed on FreeBSD at `-O0` and `-O1` and failed at `-O2` and `-O3`. It was not a FreeBSD bug and not a compiler bug. It was undefined pointer arithmetic in plthook's own code. 13 lines in `plthook_elf.c` made it well-defined and it passed at every level.
 
-**[core #805](https://github.com/metacall/core/pull/805), merged.** FreeBSD CI with sanitizers enabled, which is where the harder failures surface. Included a fix in `plthook_detour_impl.c` and in the WASM test.
-
-The FreeBSD pipeline on `develop` now runs three build types across x86-64 and arm64, with clean, AddressSanitizer and ThreadSanitizer variants, loading Python, C, WASM, Ruby, Go, Java, COBOL, file and RPC loaders.
+**[core #805](https://github.com/metacall/core/pull/805), merged.** FreeBSD CI with sanitizers turned on, which is where the harder failures show up. Included fixes in `plthook_detour_impl.c` and the WASM test.
 
 ### Haiku (June to July)
 
-**[plthook #24](https://github.com/metacall/plthook/pull/24), merged.** Haiku support in plthook, +189 lines in `plthook_elf.c` plus a Haiku CI workflow. Haiku is BeOS-derived rather than Unix-derived, so assumptions that hold on every other target here do not hold: no `/proc`, no `getconf`, and a runtime loader with its own API.
+**[plthook #24](https://github.com/metacall/plthook/pull/24), merged.** Haiku support in plthook, +189 lines in `plthook_elf.c` plus a Haiku workflow. Haiku is BeOS-derived rather than Unix-derived, so there is no `/proc`, no `getconf`, and the loader has its own API.
 
-**[core #833](https://github.com/metacall/core/pull/833), merged.** Haiku CI for MetaCall core, plus the dynlink and serialization fixes needed to get it building. Three parts:
+**[core #833](https://github.com/metacall/core/pull/833), merged.** Haiku CI for core plus the fixes needed to get it building. Three parts:
 
-- A 47-line `haiku-test.yml` running Haiku r1beta5 in a VM across debug, relwithdebinfo and release.
-- Three lines in `source/dynlink/CMakeLists.txt` selecting the `unix` dynlink implementation for Haiku. This is the non-obvious part: Haiku's OS family is `beos`, which would normally select the legacy `load_add_on` backend, but Haiku does provide a working `dlopen`. The right fix was to keep the family correct and special-case the dynlink selection, mirroring how macOS is handled a few lines above.
-- A fix in `rapid_json_serial_impl.cpp` moving the RapidJSON allocator into the document struct, so the allocator's lifetime is tied to the document rather than outliving the plugin that owns it.
-
-That last change came out of a crash class that took most of July to understand, described in section 6.
+- A 47-line `haiku-test.yml` running Haiku r1beta5 across debug, relwithdebinfo and release.
+- Three lines in `source/dynlink/CMakeLists.txt` selecting the `unix` dynlink implementation for Haiku. Haiku's OS family is `beos`, which would otherwise pick the old `load_add_on` backend, but Haiku does provide a working `dlopen`. Special-casing the selection was the right fix, the same way macOS is handled a few lines above.
+- A fix in `rapid_json_serial_impl.cpp` moving the RapidJSON allocator into the document struct, so it dies with the document instead of outliving the plugin that owns it.
 
 ### MinGW / MSYS2 (July)
 
-**[core #846](https://github.com/metacall/core/pull/846), open.** MinGW is Windows without MSVC, which means Windows headers and semantics but a GCC toolchain and a POSIX-ish shell. This PR adds a 58-line `windows-mingw-test.yml` and works through what breaks: `CompileOptions.cmake` and `InstallGTest.cmake` flags, `log_policy_stream_syslog.c` (no syslog under MinGW), `metacall_link.c`, a guard so the backtrace plugin is skipped where it cannot build, and fixes in the fork and serial tests. Currently open for review.
+**[core #846](https://github.com/metacall/core/pull/846), open.** MinGW is Windows with a GCC toolchain and a POSIX-ish shell instead of MSVC. Adds a 58-line `windows-mingw-test.yml` and works through what breaks: flags in `CompileOptions.cmake` and `InstallGTest.cmake`, `log_policy_stream_syslog.c` (no syslog under MinGW), `metacall_link.c`, a guard so the backtrace plugin is skipped where it cannot build, and fixes in the fork and serial tests.
 
-### Teardown race investigation (July, ongoing)
+### Teardown reproducer (July)
 
-**[plthook #25](https://github.com/metacall/plthook/pull/25).** A standalone ThreadSanitizer reproducer for the destructor-after-unload crash class described in section 6, built so the bug can be discussed against a minimal case instead of against a full MetaCall CI log.
+**[plthook #25](https://github.com/metacall/plthook/pull/25).** A standalone ThreadSanitizer reproducer for the destructor-after-unload crash, so the bug can be discussed against a small case instead of a full CI log.
 
 ## 3. Current State
 
-Merged and running on `metacall/core:develop` today:
+On `metacall/core:develop`:
 
-- **`freebsd-test.yml`** runs FreeBSD 14.2 across three build types, x86-64 and arm64, with clean, AddressSanitizer and ThreadSanitizer variants, exercising nine loaders. This workflow did not exist before this project. The plain builds pass on both architectures; the sanitizer and release variants are currently red on the outstanding teardown issues listed in section 4, which is exactly what the pipeline was built to expose.
-- **`haiku-test.yml`** runs Haiku r1beta5 on x86-64 across three build types. Did not exist before this project. It is currently red on the destructor-after-unload crash described in section 6; the workflow reports a crash dump rather than hanging, which is what makes that bug tractable at all.
-- **FreeBSD and Haiku sections in `tools/metacall-environment.sh`**, so both platforms are reproducible locally with the same three-script pipeline used everywhere else. No platform setup lives in the workflow YAML.
-- **HP-UX dynlink backend** (`dynlink_impl_hpux.c`) and `PROJECT_OS_HPUX` detection.
-- **Haiku dynlink selection** and the RapidJSON allocator lifetime fix.
-- **plthook** has merged FreeBSD, Haiku and Android CI support, and the `-O2`/`-O3` undefined-behaviour fix.
+- **`freebsd-test.yml`**, which did not exist before this project. FreeBSD 14.2, three build types, x86-64 and arm64, clean plus AddressSanitizer and ThreadSanitizer, exercising nine loaders. The plain builds pass on both architectures. The sanitizer and release variants currently fail on the teardown bug described below.
+- **`haiku-test.yml`**, which also did not exist before. Haiku r1beta5, x86-64, three build types. Currently failing on the same class of bug.
+- FreeBSD and Haiku sections in `tools/metacall-environment.sh`, so both are reproducible locally with the same three-script pipeline used everywhere else.
+- The HP-UX dynlink backend and `PROJECT_OS_HPUX` detection.
+- The Haiku dynlink selection and the RapidJSON allocator fix.
+- plthook has FreeBSD, Haiku and Android CI support merged, plus the `-O2`/`-O3` fix.
 
-Open and awaiting review:
+Open and awaiting review: MinGW/MSYS2 ([#846](https://github.com/metacall/core/pull/846)) and Android dynlink ([#620](https://github.com/metacall/core/pull/620)).
 
-- MinGW/MSYS2 support ([core #846](https://github.com/metacall/core/pull/846)).
-- Android dynlink support ([core #620](https://github.com/metacall/core/pull/620)).
-
-## 4. What's Left
-
-| Item | Status |
-|---|---|
-| MinGW / MSYS2 support ([#846](https://github.com/metacall/core/pull/846)) | Implemented, workflow added, awaiting maintainer review |
-| Android dynlink support ([#620](https://github.com/metacall/core/pull/620)) | Implemented, awaiting review |
-| Android CI for core via `CMAKE_CROSSCOMPILING_EMULATOR` + `adb` | In progress. Running the test suite on a device or emulator from CMake, rather than only cross-compiling |
-| FreeBSD Python teardown segfault | Root cause identified (see section 6). The fix touches loader shutdown ordering, which is a maintainer decision rather than mine to make unilaterally |
-| Haiku TLS destructor crash | Same root cause family. Partially mitigated by the RapidJSON fix in [#833](https://github.com/metacall/core/pull/833); the general case remains |
-| Cygwin support | Not started |
-| NetBSD support in core | Landed in `plthook-poc` only; not yet carried into core |
-
-I want to be straightforward about the two crash items. Both are understood, both are documented with reproducers, and neither is a case of the platform being unsupported. They are pre-existing lifetime bugs in MetaCall's teardown path that only these platforms were strict enough to expose.
-
-## 5. Pull Requests
+## 4. Pull Requests
 
 ### GSoC coding period
 
@@ -150,27 +129,26 @@ I want to be straightforward about the two crash items. Both are understood, bot
 | [#620](https://github.com/metacall/core/pull/620) | core | Add Android platform support for dynlink module | Open | Jan 22, 2026 | +1101 / -1 |
 | [#617](https://github.com/metacall/core/pull/617) | core | Add HP-UX platform support for dynlink module | Merged | Jan 19, 2026 | +229 / -0 |
 
-Live lists:
+Live lists: [metacall/core](https://github.com/metacall/core/pulls?q=is%3Apr+author%3Ayug105) and [metacall/plthook](https://github.com/metacall/plthook/pulls?q=is%3Apr+author%3Ayug105).
 
-- [metacall/core](https://github.com/metacall/core/pulls?q=is%3Apr+author%3Ayug105)
-- [metacall/plthook](https://github.com/metacall/plthook/pulls?q=is%3Apr+author%3Ayug105)
+## 5. Challenges and Lessons Learned
 
-## 6. Challenges and Lessons Learned
+**Optimisation exposes undefined behaviour, it does not cause it.** plthook passed on FreeBSD at `-O0` and `-O1` and failed at `-O2` and `-O3`. The obvious conclusions are that the optimiser is wrong or that FreeBSD is doing something strange, and the obvious fix is to lower the optimisation level for that platform. Both are wrong. The real cause was undefined pointer arithmetic in plthook's own code that the compiler was allowed to assume never happened. If something only breaks at higher optimisation, it is usually a bug that was being masked, not one that was introduced.
 
-**Optimisation levels expose undefined behaviour, they do not cause it.** plthook passed its tests on FreeBSD at `-O0` and `-O1` and failed at `-O2` and `-O3`. The tempting conclusion is that the optimiser is wrong, or that FreeBSD is doing something unusual, and the tempting fix is to lower the optimisation level for that platform. Both are wrong. The real cause was undefined pointer arithmetic in `plthook_elf.c` that the compiler was allowed to assume never happened. [plthook #23](https://github.com/metacall/plthook/pull/23) fixed the arithmetic in 13 lines and the failures went away at every level. The general lesson is that a bug which appears only at higher optimisation is almost always a latent bug in your own code that was previously being masked.
+**Two crashes on two operating systems can be the same bug.** The FreeBSD Python segfault and the Haiku crash looked unrelated. Different OS, different runtime, different stack trace. They are the same failure: something with a destructor, either a `thread_local` object or a runtime's own thread state, gets destroyed after the shared object holding its code has already been unloaded, so the call lands in memory that is no longer mapped. FreeBSD and Haiku both show it because their linkers unmap sooner than glibc does. Treating them as one bug instead of two turned a pair of unrelated CI failures into a single question about shutdown ordering. The RapidJSON fix in [#833](https://github.com/metacall/core/pull/833) is one case of it fixed properly.
 
-**Two crashes on two operating systems can be one bug.** The FreeBSD Python segfault and the Haiku crash looked unrelated: different OS, different language runtime, different stack trace. They are the same failure mode. Something with a destructor, a `thread_local` object or a runtime's own thread state, is destroyed after the shared object that owns its code has already been unloaded, so the destructor call jumps into memory that is no longer mapped. FreeBSD and Haiku both surface it because their linkers unmap more eagerly than glibc does. Recognising these as one family, rather than two platform bugs, is what turned an intractable pair of CI failures into a single question about teardown ordering. The RapidJSON allocator fix in [#833](https://github.com/metacall/core/pull/833) is one instance of it fixed properly, by tying the allocator's lifetime to the document that uses it.
+**Platform logic belongs in the environment script, not in CI.** This was a constraint from the project description and it turned out to be the most useful rule in the project. Putting `pkg install` lines straight into `freebsd-test.yml` is faster and it works. But then the only way to build on FreeBSD is to push a commit and wait for a VM, and the only person who can debug a FreeBSD failure is someone willing to read the workflow file. Keeping it in `tools/metacall-environment.sh` means the CI job is three lines anyone can run locally.
 
-**Platform logic belongs in the environment script, not in CI.** This was a hard constraint from the project description and it turned out to be the single most useful rule in the project. It is much faster to put `pkg install` lines directly in `freebsd-test.yml`, and it produces something that works. But then the only way to build MetaCall on FreeBSD is to push a commit and wait for a VM, and the only person who can debug a FreeBSD failure is someone who can read the workflow file. Keeping every platform section inside `tools/metacall-environment.sh` means the CI job is three lines that anyone can run locally, and the platform knowledge lives somewhere a contributor will actually find it.
+**Not every platform is Unix.** Haiku is BeOS-derived, so no `/proc`, no `getconf`, and its own loader API. Plenty of code that is portable across Linux, macOS and the BSDs does not apply. But it is not different in every way either. It does have a working `dlopen`, which is why the fix in [#833](https://github.com/metacall/core/pull/833) was three lines picking the `unix` implementation rather than a whole new Haiku backend. Working out which differences are real and which are assumed is most of the work in a port.
 
-**Not every platform is Unix.** Haiku is BeOS-derived. It has no `/proc`, no `getconf`, and its own loader API, so a large amount of code that is portable across Linux, macOS and the BSDs simply does not apply. But it is also not uniformly different: it does provide a working `dlopen`, which is why the right fix in [#833](https://github.com/metacall/core/pull/833) was three lines selecting the `unix` dynlink implementation for Haiku specifically, rather than writing a whole Haiku backend. Working out which of a platform's differences are real and which are assumed is most of the work in porting.
+**Break the CI first.** Adding a workflow that you know will fail feels backwards, but it was the right order every time. A failure log from a real FreeBSD 14.2 VM tells you which header is missing and which CMake check failed. Reading the source and writing a fix from a guess produces changes that look reasonable and break something else.
 
-**Get the CI failing before writing the fix.** Adding the workflow first felt backwards, since it means deliberately pushing something that goes red. It was the right order every time. A real failure log from a real FreeBSD 14.2 VM tells you exactly which header is missing and which CMake check failed. Guessing from the source and writing a speculative fix produces changes that look plausible, pass review on vibes, and then break something else. Every platform in this project followed the same loop: red CI, then environment script, then build system, then test failures.
+**Never disable something to get CI green.** The quickest way to a green MinGW build is to switch off whatever does not compile. Skipping the backtrace plugin under MinGW because it genuinely cannot build there is a documented limitation. Skipping a test because it fails is hiding a bug and handing it to whoever hits it next. The two look identical in a diff and the difference matters, and it is the maintainer's call rather than mine. Where I could not find the real fix, the right move was to report the error and ask.
 
-**Never disable a feature to make CI green.** The fastest route to a green MinGW build is to switch off whatever does not compile. I did that early on and was rightly pulled up for it. Turning off the backtrace plugin under MinGW because it genuinely cannot build there is a documented limitation; turning off a test because it fails is hiding a bug and shifting it onto whoever hits it next. The distinction matters and it is the reviewer's call, not the contributor's. When I could not find the real fix, the correct move was to report the error and ask.
+### What's left
 
-**Small PRs get reviewed, large ones do not.** My first attempts at both Android ([#619](https://github.com/metacall/core/pull/619), [#621](https://github.com/metacall/core/pull/621)) and Haiku ([#819](https://github.com/metacall/core/pull/819), 23 files) were closed. The Haiku work that eventually merged was [#833](https://github.com/metacall/core/pull/833) at three files. Same problem, same understanding, a fraction of the diff, and it went in. A PR that touches 23 files across dynlink, CMake, CI and the serialization layer is not one change, it is six changes that a reviewer has to untangle before they can even start.
+MinGW/MSYS2 ([#846](https://github.com/metacall/core/pull/846)) and Android dynlink ([#620](https://github.com/metacall/core/pull/620)) are implemented and waiting on review. Android CI for core, running the suite on a device through `CMAKE_CROSSCOMPILING_EMULATOR` and `adb`, is in progress. Cygwin is not started, and NetBSD support exists in `plthook-poc` but has not been carried into core. The FreeBSD Python teardown segfault and the Haiku destructor crash are both understood and have reproducers, but the fix changes loader shutdown ordering, which is a maintainer decision rather than mine.
 
 ---
 
-Thanks to [@viferga](https://github.com/viferga) for reviewing and merging this work, and to [@pkspyder](https://github.com/pkspyder) and [@Ashpect](https://github.com/Ashpect) for mentoring the project. The review style here is Socratic rather than prescriptive, which was uncomfortable at first and is the reason I understand the dynamic linker instead of just having patched around it.
+Thanks to [@viferga](https://github.com/viferga), [@pkspyder](https://github.com/pkspyder) and [@Ashpect](https://github.com/Ashpect) for the mentorship.
