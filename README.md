@@ -120,6 +120,8 @@ Live lists: [metacall/core](https://github.com/metacall/core/pulls?q=is%3Apr+aut
 
 ## 4. Challenges and Lessons Learned
 
+**Supporting a new OS is a way of finding bugs in your own code.** Every platform I added turned up problems that were already there. The `-O2` failure on FreeBSD was undefined behaviour in plthook that Linux happened to tolerate. The RapidJSON allocator outliving its plugin was a lifetime bug that only surfaced once Haiku unmapped the library sooner than glibc does. None of these were FreeBSD or Haiku bugs. They were MetaCall and plthook bugs that Linux was forgiving enough to hide. Every OS enforces a slightly different set of rules, so each new target is another checker run against the same code, and the fixes make it more correct everywhere and not just on the new platform.
+
 **Optimisation exposes undefined behaviour, it does not cause it.** plthook passed on FreeBSD at `-O0` and `-O1` and failed at `-O2` and `-O3`. The obvious conclusions are that the optimiser is wrong or that FreeBSD is doing something strange, and the obvious fix is to lower the optimisation level for that platform. Both are wrong. The real cause was undefined pointer arithmetic in plthook's own code that the compiler was allowed to assume never happened. If something only breaks at higher optimisation, it is usually a bug that was being masked, not one that was introduced.
 
 **Two crashes on two operating systems can be the same bug.** The FreeBSD Python segfault and the Haiku crash looked unrelated. Different OS, different runtime, different stack trace. They are the same failure: something with a destructor, either a `thread_local` object or a runtime's own thread state, gets destroyed after the shared object holding its code has already been unloaded, so the call lands in memory that is no longer mapped. FreeBSD and Haiku both show it because their linkers unmap sooner than glibc does. Treating them as one bug instead of two turned a pair of unrelated CI failures into a single question about shutdown ordering. The RapidJSON fix in [#833](https://github.com/metacall/core/pull/833) is one case of it fixed properly.
@@ -130,7 +132,7 @@ Live lists: [metacall/core](https://github.com/metacall/core/pulls?q=is%3Apr+aut
 
 **Break the CI first.** Adding a workflow that you know will fail feels backwards, but it was the right order every time. A failure log from a real FreeBSD 14.2 VM tells you which header is missing and which CMake check failed. Reading the source and writing a fix from a guess produces changes that look reasonable and break something else.
 
-**Never disable something to get CI green.** The quickest way to a green MinGW build is to switch off whatever does not compile. Skipping the backtrace plugin under MinGW because it genuinely cannot build there is a documented limitation. Skipping a test because it fails is hiding a bug and handing it to whoever hits it next. The two look identical in a diff and the difference matters, and it is the maintainer's call rather than mine. Where I could not find the real fix, the right move was to report the error and ask.
+**Never disable something to get CI green.** The quickest way to a green MinGW build is to switch off whatever does not compile. Skipping the backtrace plugin because it genuinely cannot build there is a documented limitation. Skipping a test because it fails is hiding a bug. The two look the same in a diff, and it is the maintainer's call, not mine. When I could not find the real fix, the right move was to report it and ask.
 
 ---
 
