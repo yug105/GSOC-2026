@@ -92,20 +92,7 @@ The biggest part of the project.
 
 **[plthook #25](https://github.com/metacall/plthook/pull/25).** A standalone ThreadSanitizer reproducer for the destructor-after-unload crash, so the bug can be discussed against a small case instead of a full CI log.
 
-## 3. Current State
-
-On `metacall/core:develop`:
-
-- **`freebsd-test.yml`**, which did not exist before this project. FreeBSD 14.2, three build types, x86-64 and arm64, clean plus AddressSanitizer and ThreadSanitizer, exercising nine loaders. The plain builds pass on both architectures. The sanitizer and release variants currently fail on the teardown bug described below.
-- **`haiku-test.yml`**, which also did not exist before. Haiku r1beta5, x86-64, three build types. Currently failing on the same class of bug.
-- FreeBSD and Haiku sections in `tools/metacall-environment.sh`, so both are reproducible locally with the same three-script pipeline used everywhere else.
-- The HP-UX dynlink backend and `PROJECT_OS_HPUX` detection.
-- The Haiku dynlink selection and the RapidJSON allocator fix.
-- plthook has FreeBSD, Haiku and Android CI support merged, plus the `-O2`/`-O3` fix.
-
-Open and awaiting review: MinGW/MSYS2 ([#846](https://github.com/metacall/core/pull/846)) and Android dynlink ([#620](https://github.com/metacall/core/pull/620)).
-
-## 4. Pull Requests
+## 3. Pull Requests
 
 ### GSoC coding period
 
@@ -131,7 +118,7 @@ Open and awaiting review: MinGW/MSYS2 ([#846](https://github.com/metacall/core/p
 
 Live lists: [metacall/core](https://github.com/metacall/core/pulls?q=is%3Apr+author%3Ayug105) and [metacall/plthook](https://github.com/metacall/plthook/pulls?q=is%3Apr+author%3Ayug105).
 
-## 5. Challenges and Lessons Learned
+## 4. Challenges and Lessons Learned
 
 **Optimisation exposes undefined behaviour, it does not cause it.** plthook passed on FreeBSD at `-O0` and `-O1` and failed at `-O2` and `-O3`. The obvious conclusions are that the optimiser is wrong or that FreeBSD is doing something strange, and the obvious fix is to lower the optimisation level for that platform. Both are wrong. The real cause was undefined pointer arithmetic in plthook's own code that the compiler was allowed to assume never happened. If something only breaks at higher optimisation, it is usually a bug that was being masked, not one that was introduced.
 
