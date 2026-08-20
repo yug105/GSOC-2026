@@ -46,19 +46,19 @@ Then move to the next platform. Doing them one at a time kept the PRs small enou
 
 ## 2. What I Did
 
-### HP-UX (January)
+### HP-UX
 
 **[core #617](https://github.com/metacall/core/pull/617), merged.** HP-UX does not have `dlopen`. It uses `shl_load`, `shl_findsym` and `shl_unload`, which is a different API entirely. I wrote `dynlink_impl_hpux.c` and its header, wired it through `dynlink_interface.h`, and added `PROJECT_OS_HPUX` with its own `hpux` OS family in `cmake/Portability.cmake` so the dynlink CMakeLists picks the right backend.
 
 This set the pattern for everything after. Dynlink is an interface with one implementation per OS family, so adding a platform means adding an implementation, not adding `#ifdef`s to an existing one.
 
-### Android (January to February)
+### Android
 
 **[core #620](https://github.com/metacall/core/pull/620), open.** Bionic's linker differs enough from glibc that the Unix dynlink path needs its own handling. This PR adds that handling. Still open.
 
 **[plthook #17](https://github.com/metacall/plthook/pull/17), merged.** plthook's Android CI was broken before I could test the core side, so I fixed that first. Rewrote the test runner as `test/android/run_tests.sh`, fixed `Android.mk` and `Application.mk`, repaired the workflow.
 
-### FreeBSD (March to June)
+### FreeBSD
 
 The biggest part of the project.
 
@@ -74,7 +74,7 @@ The biggest part of the project.
 
 **[core #805](https://github.com/metacall/core/pull/805), merged.** FreeBSD CI with sanitizers turned on, which is where the harder failures show up. Included fixes in `plthook_detour_impl.c` and the WASM test.
 
-### Haiku (June to July)
+### Haiku
 
 **[plthook #24](https://github.com/metacall/plthook/pull/24), merged.** Haiku support in plthook, in `plthook_elf.c`, plus a Haiku workflow. Haiku is BeOS-derived rather than Unix-derived, so there is no `/proc`, no `getconf`, and the loader has its own API.
 
@@ -84,11 +84,11 @@ The biggest part of the project.
 - A change in `source/dynlink/CMakeLists.txt` selecting the `unix` dynlink implementation for Haiku. Haiku's OS family is `beos`, which would otherwise pick the old `load_add_on` backend, but Haiku does provide a working `dlopen`. Special-casing the selection was the right fix, the same way macOS is handled a few lines above.
 - A fix in `rapid_json_serial_impl.cpp` moving the RapidJSON allocator into the document struct, so it dies with the document instead of outliving the plugin that owns it.
 
-### MinGW / MSYS2 (July)
+### MinGW / MSYS2
 
 **[core #846](https://github.com/metacall/core/pull/846), open.** MinGW is Windows with a GCC toolchain and a POSIX-ish shell instead of MSVC. Adds a `windows-mingw-test.yml` and works through what breaks: flags in `CompileOptions.cmake` and `InstallGTest.cmake`, `log_policy_stream_syslog.c` (no syslog under MinGW), `metacall_link.c`, a guard so the backtrace plugin is skipped where it cannot build, and fixes in the fork and serial tests.
 
-### Teardown reproducer (July)
+### Teardown reproducer
 
 **[plthook #25](https://github.com/metacall/plthook/pull/25).** A standalone ThreadSanitizer reproducer for the destructor-after-unload crash, so the bug can be discussed against a small case instead of a full CI log.
 
